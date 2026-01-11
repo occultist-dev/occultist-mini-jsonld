@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "declaration": true,
+    "declarationDir": "./dist",
+    "target": "es2024",
+    "moduleResolution": "nodenext",
+    "module": "nodenext",
+    "rewriteRelativeImportExtensions": true
+  },
+  "include": [
+    "lib/**/*.ts",
+    "test/**/*.ts"
+  ]
+}
