@@ -1,4 +1,3 @@
-import {isJSONObject} from "./isJSONObject.ts";
 
 export type JSONPrimitive = string | number | boolean | null | undefined;
 
@@ -8,29 +7,29 @@ export type JSONObject = { [member: string]: JSONValue };
 
 export interface JSONArray extends Array<JSONValue> {}
 
-export type IRIObject<Properties extends JSONObject = JSONObject> =
+export type IRIObject<Properties extends JSONValue = JSONValue> =
   & Properties
   & {
     '@id': string;
   };
 
-export type TypeObject<Properties extends JSONObject = JSONObject> =
+export type TypeObject<Properties extends JSONValue = JSONValue> =
   & Properties
   & { '@type': string | string[] };
 
-export type ValueObject<Properties extends JSONObject = JSONObject> =
+export type ValueObject<Properties extends JSONValue = JSONValue> =
   & Properties
   & { '@value': JSONValue };
 
-export type ListObject<Properties extends JSONObject = JSONObject> =
+export type ListObject<Properties extends JSONValue = JSONValue> =
   & Properties
   & { '@list': JSONArray };
 
-export type SetObject<Properties extends JSONObject = JSONObject> =
+export type SetObject<Properties extends JSONValue = JSONValue> =
   & Properties
   & { '@set': JSONArray };
 
-export type IterableJSONLD<Properties extends JSONObject = JSONObject> =
+export type IterableJSONLD<Properties extends JSONValue = JSONValue> =
   | JSONArray
   | ListObject<Properties>
   | SetObject<Properties>
@@ -54,13 +53,13 @@ export type JSONLDSourceDataType =
 ;
 
 export class JSONLDContextSource {
-  url: string;
-  json: JSONObject;
+  url: string | undefined;
+  json: JSONObject | JSONArray;
   datatype: JSONLDSourceDataType;
 
   constructor(
-    url: string,
-    json: JSONObject,
+    url: string | undefined,
+    json: JSONObject | JSONArray,
   ) {
     this.url = url;
     this.json = json;
@@ -160,9 +159,22 @@ export class JSONLDContextBag {
 }
 
 export type JSONLDContainer = 
-  | 'list'
-  | 'set'
+  | '@list'
+  | '@set'
+  | '@language'
+  | '@index'
+  | '@id'
+  | '@type'
 ;
+
+const containerTypes = new Set([
+  '@list',
+  '@set',
+  '@language',
+  '@index',
+  '@id',
+  '@type',
+]);
 
 export class JSONLDTypeDef {
   id: string;
@@ -225,6 +237,8 @@ export class JSONLDContext {
 
   types: Map<string, JSONLDTypeDef>;
 
+  cache: Map<string, string> = new Map();
+
   constructor(
     url: string | undefined,
     iri: string | undefined,
@@ -245,6 +259,50 @@ export class JSONLDContext {
     this.aliases = aliases;
     this.kwaliases = kwaliases;
     this.types = types;
+  }
+
+  expand = (termOrType: string | undefined): string | undefined => {
+    if (this.cache.has(termOrType)) {
+      return this.cache.get(termOrType);
+    }
+
+    if (urlRe.test(termOrType)) {
+      this.cache.set(termOrType, termOrType);
+
+      return termOrType;
+    }
+    
+    const match = aliasRe.exec(termOrType);
+
+    if (match == null && this.vocab != null) {
+      const type = this.vocab + termOrType;
+
+      this.cache.set(termOrType, type);
+
+      return type;
+    } else if (match == null) {
+      console.warn(`No match for term "${termOrType}"`);
+
+      return;
+    }
+
+    const def = this.types.get(match[1]);
+
+    if (def == null) return;
+
+    const type = `${def}${match[2]}`;
+
+    this.cache.set(termOrType, type);
+
+    return type;
+  }
+
+  expandDataTypes = (dataTypes: string | string[] | undefined) => {
+    if (typeof dataTypes === 'string') {
+      return this.expand(dataTypes);
+    } else if (Array.isArray(dataTypes)) {
+      return dataTypes.map(this.expand);
+    }
   }
 
   static fromOthers(
@@ -298,7 +356,7 @@ export class JSONLDContext {
   }
   
   static fromJSONObject(source: JSONLDContextSource): JSONLDContext {
-    const context = source.json['@context'] ?? source.json as JSONObject;
+    const context = source.json['@context'] ?? source.json as JSONValue;
     const aliases = new Map<string, string>();
     const kwaliases = new JSONLDKWAliases();
     const types = new Map<string, JSONLDTypeDef>();
@@ -467,19 +525,33 @@ export class JSONLDContext {
   }
 }
 
-
-type PointerTarget = {
-  inArray: boolean;
-  isArray: boolean | undefined; // undefined means scala value
+type ObjectNode = {
+  parent: Node | undefined;
+  index: number | undefined;
+  isArray: false,
   termOrType: string | undefined;
-  type: string;
-  container: string;
-  value: JSONValue;
-  children: JSONValue[] | Array<[string, JSONValue]> | undefined;
+  type: string | undefined;
+  container: JSONLDContainer | undefined;
+  value: JSONObject;
+  children: Array<[string, JSONValue]>;
   context: JSONLDContext | undefined;
 };
 
-type PointerList = Array<PointerTarget>;
+type ArrayNode = {
+  parent: Node | undefined;
+  index: number | undefined;
+  isArray: true,
+  termOrType: string | undefined;
+  type: string | undefined;
+  container: JSONLDContainer | undefined; value: JSONArray;
+  children: JSONValue[];
+  context: JSONLDContext | undefined;
+};
+
+type Node = ObjectNode | ArrayNode;
+
+
+const scalaTypes = new Set('boolean', 'number', 'string');
 
 export async function expand(input: JSONValue, {
   bag = new JSONLDContextBag({}),
@@ -490,50 +562,168 @@ export async function expand(input: JSONValue, {
 }): Promise<JSONValue> {
   if (input == null) return [];
 
-  switch (typeof input) {
-    case 'boolean': return [];
-    case 'number': return [];
-    case 'string': return [];
+  if (scalaTypes.has(typeof input)) {
+    console.warn(`JSON-LD input "${input}" must be an object or array`);
+
+    return null;
   }
  
-  let i: number = 0; 
-  let length: number = 0;
+  let termOrType: string | undefined;
+  let type: string;
   let value: JSONValue = null;
-  let x: number = 0;
-  let y: number = 0;
-  let lowestLevel: number | undefined;
-  let done: boolean = false;
-  let pointerList: PointerList = [];
+  let context: JSONLDContext | undefined;
+  let node: Node;
+  const source = new JSONLDContextSource(undefined, input as JSONObject | JSONArray);
 
   if (Array.isArray(input)) {
-
-  } else {
-    let context: JSONLDContext;
-
-    if (input['@context'] != null) {
-      context = await bag.fetchContext(
-
-    pointerList[0] = {
-      inArray: false,
-      isArray: Array.isArray(input),
+    node = {
+      isArray: true,
+      children: [...input],
+      value: input,
+      index: 0,
+      context: undefined,
+      parent: undefined,
       termOrType: undefined,
-      type: 
-    }
-  
+      type: undefined,
+      container: undefined,
+    } satisfies ArrayNode;
+  } else {
+    context = JSONLDContext.fromJSONObject(source);
+
+    node = {
+      isArray: false,
+      children: Object.entries(input),
+      value: input as JSONObject,
+      context,
+      index: 0,
+      parent: undefined,
+      termOrType: undefined,
+      type: undefined,
+      container: undefined,
+    } satisfies ObjectNode;
   }
   
   do {
-    pointerList.push();
+    // aim of this do-while is to find the first object / array
+    // with yet to be processed leaves.
 
-    // find working pointer
-    do {
+    if (node.index + 1 === node.children.length) {
+      // if the node has looped through its children, time to expand it and move up.
+      context = node.context;
       
-    } while (!done)
-    
-    do {
+      const typeKW = context?.kwaliases?.['@type'] ?? '@type';
 
-    } while (!done)
-  } while (!done)
+      // expand the value's @type value
+      if (!node.isArray && node.value[typeKW] != null) {
+        node['@type'] = node?.context.expand(node.value[typeKW]);
+      }
+      
+      // place the value within its container.
+      if (containerTypes.has(node.container)) {
+        node.value = { [node.container]: node.value };
+      }
+
+      // expand this value's term on the parent.
+      if (node.type != null && node.type !== node.termOrType) {
+        if (Array.isArray(node.parent.value[node.type])) {
+          node.parent.value[node.type].push(node.value);
+        } else if (node.parent.value[node.type] != null) {
+          node.parent.value[node.type] = [
+            node.parent.value[node.type],
+            node.value,
+          ];
+        } else {
+          node.parent.value[node.type] = node.value;
+        }
+
+        delete node.parent.value[node.termOrType];
+      }
+
+      node = node.parent;
+
+      if (node == null) {
+        break;
+      }
+
+      node.index++;
+
+      continue;
+    }
+
+    // get the next value
+    if (node.isArray) {
+      termOrType = undefined;
+      value = node.children[node.index];
+    } else {
+      [termOrType, value] = (node as ObjectNode).children[node.index];
+
+      if (termOrType[0] === '@') {
+        node.index++;
+        continue;
+      }
+
+      console.log('CTX', node.context);
+      type = node.context?.expand(termOrType);
+      console.log('EXPANDED', type);
+    }
+
+    node.index++;
+
+    if (value == null || scalaTypes.has(typeof value)) {
+      if (!node.isArray && type != null && type !== termOrType) {
+        if (Array.isArray(node.value[type])) {
+          node.value[type].push(value);
+        } else if (node.value[type] != null) {
+          node.value[type] = [
+            node.value[type],
+            value,
+          ];
+        } else {
+          node.value[type] = value;
+        }
+
+        delete node[termOrType];
+      }
+
+      break;
+    } else if (Array.isArray(value)) {
+      node = {
+        isArray: true,
+        children: [...value],
+        value,
+        index: 0,
+        context: node.context,
+        parent: node,
+        termOrType: undefined,
+        type: undefined,
+        container: undefined,
+      } satisfies ArrayNode;
+    } else {
+      if (type == null) {
+        console.warn(`Unrecognized term "${termOrType}" in ${node.value}`);
+
+        break;
+      } else {
+        if (value['@context'] != null) {
+          context = JSONLDContext.fromJSONObject(
+            new JSONLDContextSource(undefined, value as JSONObject),
+          );
+        }
+  
+        node = {
+          isArray: false,
+          children: Object.entries(value),
+          value: value as JSONObject,
+          context,
+          index: 0,
+          parent: node,
+          termOrType,
+          type,
+          container: undefined,
+        } satisfies ObjectNode;
+      }
+    }
+  } while (true)
 
   return input;
 }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import {JSONLDContextBag, type IRIObject} from '../lib/expand.ts';
+import {JSONLDContextBag, type IRIObject, expand} from '../lib/expand.ts';
 
 
 function makeFetcher(docs: IRIObject[]): typeof fetch {
@@ -48,4 +48,57 @@ describe('JSONLDContext.fromJSONObject()', () => {
     assert.equal(ctx.vocab, 'https://schema.org/');
     assert.equal(ctx.language, 'en-NZ');
   });
+});
+
+const jsonld = {
+    "@id": "http://store.example.com/",
+    "@type": "Store",
+    "name": "Links Bike Shop",
+    "description": "The most \"linked\" bike store on earth!",
+    "product": [
+        {
+            "@id": "p:links-swift-chain",
+            "@type": "Product",
+            "name": "Links Swift Chain",
+            "description": "A fine chain with many links.",
+            "category": ["cat:parts", "cat:chains"],
+            "price": "10.00",
+            "stock": 10
+        },
+        {
+            "@id": "p:links-speedy-lube",
+            "@type": "Product",
+            "name": "Links Speedy Lube",
+            "description": "Lubricant for your chain links.",
+            "category": ["cat:lube", "cat:chains"],
+            "price": "5.00",
+            "stock": 20
+        }
+    ],
+    "@context": {
+        "Store": "http://ns.example.com/store#Store",
+        "Product": "http://ns.example.com/store#Product",
+        "product": "http://ns.example.com/store#product",
+        "category":
+        {
+          "@id": "http://ns.example.com/store#category",
+          "@type": "@id"
+        },
+        "price": "http://ns.example.com/store#price",
+        "stock": "http://ns.example.com/store#stock",
+        "name": "http://purl.org/dc/terms/title",
+        "description": "http://purl.org/dc/terms/description",
+        "p": "http://store.example.com/products/",
+        "cat": "http://store.example.com/category/"
+    }
+};
+
+describe('parse()', () => {
+
+  it('Parses JSON-LD', {only:true}, async () => {
+    const output = await expand(jsonld, {});
+
+    console.log(output);
+  });
+
 });
