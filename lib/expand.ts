@@ -276,10 +276,6 @@ export class JSONLDContext {
 
     const match = aliasRe.exec(termOrType);
 
-    if (termOrType === 'cat:parts') {
-      console.log('MATCH', match);
-    }
-
     if (match == null && this.vocab != null) {
       const type = this.vocab + termOrType;
 
@@ -309,7 +305,7 @@ export class JSONLDContext {
       let def = this.types.get(match[1]);
       def = new JSONLDTypeDef(def.id + match[2]);
 
-      this.types.set(def);
+      this.types.set(termOrType, def);
 
       return def;
     }
@@ -715,8 +711,6 @@ export async function expand(input: JSONValue, {
     
     // expand the selected child
     if (value == null || asValue || scalaTypes.has(typeof value)) {
-      if (termOrType === 'category') console.log('HANDLING CATE');
-      
       if (!node.isArray && type != null && type !== termOrType) {
         if (Array.isArray(node.value[type])) {
           node.value[type].push(value);
