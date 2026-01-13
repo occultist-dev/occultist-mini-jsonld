@@ -276,6 +276,10 @@ export class JSONLDContext {
 
     const match = aliasRe.exec(termOrType);
 
+    if (termOrType === 'cat:parts') {
+      console.log('MATCH', match);
+    }
+
     if (match == null && this.vocab != null) {
       const type = this.vocab + termOrType;
 
@@ -292,19 +296,25 @@ export class JSONLDContext {
       return;
     }
 
-    if (this.types.has(match[1])) {
-      const type = this.types.get(match[1]);
-
-      if (type != null) {
-        return type;
-      }
-
-      const def = new JSONLDTypeDef(this.vocab + termOrType);
+    if (Object.hasOwn(this.aliases[match[1]])) {
+      const alias = this.aliases[match[1]];
+      const def = new JSONLDTypeDef(alias + match[2]);
 
       this.types.set(termOrType, def);
 
       return def;
     }
+
+    if (this.types.has(match[1])) {
+      let def = this.types.get(match[1]);
+      def = new JSONLDTypeDef(def.id + match[2]);
+
+      this.types.set(def);
+
+      return def;
+    }
+
+    console.warn(`Unrecognized alias "${match[1]}" for "${termOrType}"`);
   }
 
   expandIRIs = (dataTypes: string | string[] | undefined) => {
@@ -694,9 +704,19 @@ export async function expand(input: JSONValue, {
     }
 
     node.index++;
+
+    let asValue = false;
+
+    if (def?.type === '@id') {
+      asValue = true;
+
+      value = { '@id': node.context.expandIRIs(value as string) };
+    }
     
     // expand the selected child
-    if (value == null || scalaTypes.has(typeof value)) {
+    if (value == null || asValue || scalaTypes.has(typeof value)) {
+      if (termOrType === 'category') console.log('HANDLING CATE');
+      
       if (!node.isArray && type != null && type !== termOrType) {
         if (Array.isArray(node.value[type])) {
           node.value[type].push(value);
