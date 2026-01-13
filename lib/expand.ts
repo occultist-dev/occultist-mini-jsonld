@@ -41,7 +41,7 @@ export type JSONLDContextCache = Map<string, JSONLDContext>;
 
 const urlRe = /^[a-zA-Z\\-]+:\/\/[^\.]+\./;
 
-const aliasRe = /$([^:])(.*)$/;
+const aliasRe = /^([^\:]+)\:(.*)$/;
 
 export type JSONLDSourceDataType =
   | 'null'
@@ -261,48 +261,78 @@ export class JSONLDContext {
     this.types = types;
   }
 
-  expand = (termOrType: string | undefined): string | undefined => {
-    if (this.cache.has(termOrType)) {
-      return this.cache.get(termOrType);
+  getOrCreateTypeDef = (termOrType: string | undefined): JSONLDTypeDef | undefined => {
+    if (this.types.has(termOrType)) {
+      return this.types.get(termOrType);
     }
 
     if (urlRe.test(termOrType)) {
-      this.cache.set(termOrType, termOrType);
+      const def = new JSONLDTypeDef(termOrType);
 
-      return termOrType;
+      this.types.set(termOrType, def);
+
+      return def;
     }
-    
+
     const match = aliasRe.exec(termOrType);
+    console.log('MATCH', match);
 
     if (match == null && this.vocab != null) {
       const type = this.vocab + termOrType;
 
-      this.cache.set(termOrType, type);
+      if (this.types.has(type)) {
+        return this.types.get(type);
+      }
 
-      return type;
+      const def = new JSONLDTypeDef(this.vocab + termOrType);
+
+      this.types.set(termOrType, def);
+
+      return def;
     } else if (match == null) {
-      console.warn(`No match for term "${termOrType}"`);
+      console.log('THIS', this)
+      console.log('-');
+      console.log(`Unknown term 1 "${termOrType}"`);
 
       return;
     }
 
-    const def = this.types.get(match[1]);
+    console.log('M1', match[1]);
+    if (this.types.has(match[1])) {
+      const type = this.types.get(match[1]);
 
-    if (def == null) return;
+      if (type != null) {
+        return type;
+      }
 
-    const type = `${def}${match[2]}`;
+      const def = new JSONLDTypeDef(this.vocab + termOrType);
 
-    this.cache.set(termOrType, type);
+      this.types.set(termOrType, def);
 
-    return type;
+      return def;
+    }
+
+    console.warn(`Unknown term 2 "${termOrType}"`);
   }
 
-  expandDataTypes = (dataTypes: string | string[] | undefined) => {
-    if (typeof dataTypes === 'string') {
-      return this.expand(dataTypes);
-    } else if (Array.isArray(dataTypes)) {
-      return dataTypes.map(this.expand);
+  expandIRIs = (dataTypes: string | string[] | undefined) => {
+    if (dataTypes == null) {
+      return;
+    } else if (typeof dataTypes === 'string') {
+      return this.getOrCreateTypeDef(dataTypes)?.id;
     }
+
+    let types: string[] = [];
+    let def: JSONLDTypeDef;
+    for (let i = 0, l = dataTypes.length; i < l; i++) {
+      def = this.getOrCreateTypeDef(dataTypes[i]);
+
+      if (def != null) types.push(def.id);
+    }
+
+    if (types.length === 0) return;
+
+    return types;
   }
 
   static fromOthers(
@@ -318,8 +348,7 @@ export class JSONLDContext {
     let kwaliases: JSONLDKWAliases = new JSONLDKWAliases();
     let types: Map<string, JSONLDTypeDef> = new Map();
     
-    let length = others.length;
-    for (let i = 0; i < length; i++) {
+    for (let i = 0, l = others.length; i < l; i++) {
       base ??= others[i].base;
       version ??= others[i].version;
       vocab ??= others[i].vocab;
@@ -360,14 +389,14 @@ export class JSONLDContext {
     const aliases = new Map<string, string>();
     const kwaliases = new JSONLDKWAliases();
     const types = new Map<string, JSONLDTypeDef>();
-    const entries = Object.entries(context);
+    const entries: Array<[string, JSONValue]> = Object.entries(context);
     
     let base: string | undefined;
     if (typeof context['@base'] === 'string' &&
         urlRe.test(context['@base'])
     ) {
       base = context['@base'];
-    } else if (context['@base'] !== null) {
+    } else if (context['@base'] != null) {
       console.warn(`Invalid @base "${context['@base']}" from ${source.url}`);
     }
 
@@ -397,7 +426,7 @@ export class JSONLDContext {
     }
 
     let key: string;
-    let value: string;
+    let value: JSONValue;
     let length: number = entries.length;
     let i: number;
     for (i = 0; i < length; i++) {
@@ -425,49 +454,12 @@ export class JSONLDContext {
       }
     }
 
+    let iri: string | undefined;
     let match: RegExpExecArray;
     let aliasTag: string;
     let suffix: string;
     let alias: string;
-    for (i = 0; i < length; i++) {
-      [key, value] = entries[i];
-
-      if (key.startsWith('@')) continue;
-
-      switch (typeof value) {
-        case 'string': {
-          if (value.startsWith('@')) continue;
-
-          if (urlRe.test(value)) {
-            types.set(key, new JSONLDTypeDef(value));
-
-            continue;
-          }
-          match = aliasRe.exec(value);
-
-          if (match == null) {
-            console.warn(`Invalid context value "${key}": "${value}" from ${source.url}`);
-
-            continue;
-          }
-
-          [, aliasTag, suffix] = match;
-          alias = aliases.get(aliasTag);
-
-          if (alias == null) {
-            console.warn(`Unknown alias "${key}": "${value}" from ${source.url}`);
-
-            continue;
-          }
-
-          types.set(key, new JSONLDTypeDef(`${alias}${suffix}`));
-
-          continue;
-        }
-      }
-    }
-
-    let iri: string | undefined;
+    let def: JSONLDTypeDef;
     let tmpIRI = source.json[kwaliases['@id']];
 
     if (isJSONObject(source.json)) {
@@ -495,7 +487,7 @@ export class JSONLDContext {
       }
     }
     
-    return new JSONLDContext(
+    const ctx = new JSONLDContext(
       source.url,
       iri,
       base,
@@ -506,6 +498,29 @@ export class JSONLDContext {
       kwaliases,
       types,
     );
+
+    for (i = 0; i < length; i++) {
+      [key, value] = entries[i];
+
+      if (key.startsWith('@')) continue;
+
+      if (typeof value === 'string') {
+        const def = ctx.getOrCreateTypeDef(value);
+        ctx.types.set(key, def);
+      } else if (isJSONObject(value)) {
+        const termOrType = value['@id'] as string ?? key;
+        const def = ctx.getOrCreateTypeDef(termOrType);
+
+        def.type = value['@type'] as string;
+        def.container = value['@container'] as JSONLDContainer;
+
+        if (key !== termOrType) {
+          ctx.types.set(key, def);
+        }
+      }
+    }
+
+    return ctx;
   }
 
   static async fromSource(
@@ -551,7 +566,7 @@ type ArrayNode = {
 type Node = ObjectNode | ArrayNode;
 
 
-const scalaTypes = new Set('boolean', 'number', 'string');
+const scalaTypes = new Set(['boolean', 'number', 'string']);
 
 export async function expand(input: JSONValue, {
   bag = new JSONLDContextBag({}),
@@ -573,7 +588,6 @@ export async function expand(input: JSONValue, {
   let value: JSONValue = null;
   let context: JSONLDContext | undefined;
   let node: Node;
-  const source = new JSONLDContextSource(undefined, input as JSONObject | JSONArray);
 
   if (Array.isArray(input)) {
     node = {
@@ -588,8 +602,6 @@ export async function expand(input: JSONValue, {
       container: undefined,
     } satisfies ArrayNode;
   } else {
-    context = JSONLDContext.fromJSONObject(source);
-
     node = {
       isArray: false,
       children: Object.entries(input),
@@ -603,28 +615,51 @@ export async function expand(input: JSONValue, {
     } satisfies ObjectNode;
   }
   
-  do {
+  while (true) {
+    let def: JSONLDTypeDef | undefined;
+
+    if (node.index === 0 &&
+        !node.isArray &&
+        node.value['@context'] != null
+       ) {
+      // the node value defines a context.
+
+      node.context = JSONLDContext.fromJSONObject(
+        new JSONLDContextSource(undefined, node.value)
+      );
+
+      delete node.value['@context'];
+    } else if (node.index === 0 && node.parent != null) {
+      // inherit the parent node's context
+      node.context = node.parent.context;
+    }
+
+
     // aim of this do-while is to find the first object / array
     // with yet to be processed leaves.
 
     if (node.index + 1 === node.children.length) {
+      const idKW = node.context?.kwaliases['@id'] ?? '@id';
+      const typeKW = node.context?.kwaliases['@type'] ?? '@type';
       // if the node has looped through its children, time to expand it and move up.
       context = node.context;
       
-      const typeKW = context?.kwaliases?.['@type'] ?? '@type';
 
       // expand the value's @type value
-      if (!node.isArray && node.value[typeKW] != null) {
-        node['@type'] = node?.context.expand(node.value[typeKW]);
+      if (!node.isArray && node.value[idKW] != null) {
+        node.value['@id'] = node?.context.expandIRIs(node.value[idKW]);
       }
-      
+      if (!node.isArray && node.value[typeKW] != null) {
+        node.value['@type'] = node?.context.expandIRIs(node.value[typeKW]);
+      }
+
       // place the value within its container.
       if (containerTypes.has(node.container)) {
         node.value = { [node.container]: node.value };
       }
 
       // expand this value's term on the parent.
-      if (node.type != null && node.type !== node.termOrType) {
+      if (node.parent != null && node.type != null && node.type !== node.termOrType) {
         if (Array.isArray(node.parent.value[node.type])) {
           node.parent.value[node.type].push(node.value);
         } else if (node.parent.value[node.type] != null) {
@@ -645,12 +680,10 @@ export async function expand(input: JSONValue, {
         break;
       }
 
-      node.index++;
-
       continue;
     }
 
-    // get the next value
+    // get the next child of the current node
     if (node.isArray) {
       termOrType = undefined;
       value = node.children[node.index];
@@ -662,13 +695,15 @@ export async function expand(input: JSONValue, {
         continue;
       }
 
-      console.log('CTX', node.context);
-      type = node.context?.expand(termOrType);
-      console.log('EXPANDED', type);
+      def = node.context?.getOrCreateTypeDef(termOrType);
+      type = def?.id;
     }
 
-    node.index++;
+    if (termOrType === 'category') console.log('CATE', def);
 
+    node.index++;
+    
+    // expand the selected child
     if (value == null || scalaTypes.has(typeof value)) {
       if (!node.isArray && type != null && type !== termOrType) {
         if (Array.isArray(node.value[type])) {
@@ -682,49 +717,38 @@ export async function expand(input: JSONValue, {
           node.value[type] = value;
         }
 
-        delete node[termOrType];
+        delete node.value[termOrType];
       }
 
-      break;
+      continue;
     } else if (Array.isArray(value)) {
       node = {
         isArray: true,
         children: [...value],
         value,
         index: 0,
-        context: node.context,
         parent: node,
-        termOrType: undefined,
-        type: undefined,
+        termOrType,
+        type,
+        context: node.context,
         container: undefined,
       } satisfies ArrayNode;
     } else {
-      if (type == null) {
-        console.warn(`Unrecognized term "${termOrType}" in ${node.value}`);
-
-        break;
-      } else {
-        if (value['@context'] != null) {
-          context = JSONLDContext.fromJSONObject(
-            new JSONLDContextSource(undefined, value as JSONObject),
-          );
-        }
-  
-        node = {
-          isArray: false,
-          children: Object.entries(value),
-          value: value as JSONObject,
-          context,
-          index: 0,
-          parent: node,
-          termOrType,
-          type,
-          container: undefined,
-        } satisfies ObjectNode;
-      }
+      node = {
+        isArray: false,
+        children: Object.entries(value),
+        value: value as JSONObject,
+        index: 0,
+        parent: node,
+        termOrType,
+        type,
+        context: node.context,
+        container: undefined,
+      } satisfies ObjectNode;
     }
-  } while (true)
+  }
 
+  console.log('RETURNING');
   return input;
 }
 

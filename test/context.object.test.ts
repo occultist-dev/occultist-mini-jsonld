@@ -98,7 +98,7 @@ describe('parse()', () => {
   it('Parses JSON-LD', {only:true}, async () => {
     const output = await expand(jsonld, {});
 
-    console.log(output);
+    console.log(JSON.stringify(output, null, 2));
   });
 
 });
