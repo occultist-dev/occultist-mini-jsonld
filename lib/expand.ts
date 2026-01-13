@@ -275,7 +275,6 @@ export class JSONLDContext {
     }
 
     const match = aliasRe.exec(termOrType);
-    console.log('MATCH', match);
 
     if (match == null && this.vocab != null) {
       const type = this.vocab + termOrType;
@@ -290,14 +289,9 @@ export class JSONLDContext {
 
       return def;
     } else if (match == null) {
-      console.log('THIS', this)
-      console.log('-');
-      console.log(`Unknown term 1 "${termOrType}"`);
-
       return;
     }
 
-    console.log('M1', match[1]);
     if (this.types.has(match[1])) {
       const type = this.types.get(match[1]);
 
@@ -311,8 +305,6 @@ export class JSONLDContext {
 
       return def;
     }
-
-    console.warn(`Unknown term 2 "${termOrType}"`);
   }
 
   expandIRIs = (dataTypes: string | string[] | undefined) => {
@@ -638,7 +630,7 @@ export async function expand(input: JSONValue, {
     // aim of this do-while is to find the first object / array
     // with yet to be processed leaves.
 
-    if (node.index + 1 === node.children.length) {
+    if (node.index === node.children.length) {
       const idKW = node.context?.kwaliases['@id'] ?? '@id';
       const typeKW = node.context?.kwaliases['@type'] ?? '@type';
       // if the node has looped through its children, time to expand it and move up.
@@ -685,6 +677,8 @@ export async function expand(input: JSONValue, {
 
     // get the next child of the current node
     if (node.isArray) {
+      def = undefined;
+      type = undefined;
       termOrType = undefined;
       value = node.children[node.index];
     } else {
@@ -698,8 +692,6 @@ export async function expand(input: JSONValue, {
       def = node.context?.getOrCreateTypeDef(termOrType);
       type = def?.id;
     }
-
-    if (termOrType === 'category') console.log('CATE', def);
 
     node.index++;
     
@@ -748,7 +740,6 @@ export async function expand(input: JSONValue, {
     }
   }
 
-  console.log('RETURNING');
   return input;
 }
 
