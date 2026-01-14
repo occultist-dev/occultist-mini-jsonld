@@ -112,7 +112,7 @@ export class JSONLDContextBag {
   }: {
     fetcher?: typeof fetch,
     contexts?: Map<string, JSONLDContext>,
-  }) {
+  } = {}) {
     if (contexts instanceof Map) {
       this.contexts = contexts;
     }
@@ -593,7 +593,7 @@ type Node = ObjectNode | ArrayNode;
 const scalaTypes = new Set(['boolean', 'number', 'string']);
 
 export async function expand(input: JSONValue, {
-  bag = new JSONLDContextBag({}),
+  bag = new JSONLDContextBag(),
   preserveRedundantArrays,
 }: {
   bag?: JSONLDContextBag,

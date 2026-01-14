@@ -1,6 +1,85 @@
+import jsonld from 'jsonld';
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
-import {JSONLDContextBag, type IRIObject, expand} from '../lib/expand.ts';
+import {describe, it} from 'node:test';
+import {expand, JSONLDContextBag, type IRIObject, type JSONArray, type JSONValue} from '../lib/expand.ts';
+
+
+/**
+ * Recursively updates the JSON-ld to be in normal expanded form
+ * so it can be compared to the output of the jsonld.js expand function.
+ */
+function normalizeJSONLD(value: JSONValue): JSONValue {
+  function innerArray(value: JSONValue): JSONValue {
+    if (!Array.isArray(value)) {
+      if (typeof value === 'boolean' ||
+          typeof value === 'number' ||
+          typeof value === 'string') {
+        return { '@value': value }
+      }
+
+      for (const [key2, value2] of Object.entries(value)) {
+        value[key2] = inner(value2, key2);
+      }
+
+      return value;
+    }
+
+    for (let i = 0, length = value.length; i < length; i++) {
+      value[i] = inner(value[i]);
+    }
+
+    return value;
+  }
+
+  function inner(value: JSONValue, key?: string): JSONValue {
+    if (!Array.isArray(value)) {
+      if (key === '@id') return value;
+      if (key === '@type') return [value];
+
+      if (typeof value === 'boolean' ||
+          typeof value === 'number' ||
+          typeof value === 'string') {
+        return [{ '@value': value }]
+      }
+
+      for (const [key2, value2] of Object.entries(value)) {
+        value[key2] = inner(value2, key2);
+      }
+
+      return [value];
+    }
+
+    for (let i = 0, length = value.length; i < length; i++) {
+      value[i] = innerArray(value[i]);
+    }
+
+    return value;
+  }
+
+  if (value == null) return value;
+  switch (typeof value) {
+    case 'boolean': return value;
+    case 'number': return value;
+    case 'string': return value;
+  }
+
+  let normalized: JSONArray;
+
+  if (Array.isArray(value)) {
+    normalized = value;
+
+    for (let i = 0, length = value.length; i < length; i++) {
+      normalized[i] = innerArray(normalized[i]);
+    }
+  } else {
+    normalized = [value];
+    for (const [key, item] of Object.entries(value)) {
+      value[key] = inner(item, key);
+    }
+  }
+
+  return normalized;
+}
 
 
 function makeFetcher(docs: IRIObject[]): typeof fetch {
@@ -40,7 +119,6 @@ describe('JSONLDContext.fromJSONObject()', () => {
 
     const ctx = await bag.fetchContext('https://example.com/context');
 
-    console.log(ctx)
     assert.equal(ctx.url, 'https://example.com/context');
     assert.equal(ctx.iri, 'https://example.com/actual-used');
     assert.equal(ctx.base, 'https://example.com');
@@ -50,7 +128,46 @@ describe('JSONLDContext.fromJSONObject()', () => {
   });
 });
 
-const jsonld = {
+describe('parse()', () => {
+  it('Expands JSON-LD', async () => {
+    const result = await expand(structuredClone(small));
+    const normal = normalizeJSONLD(result);
+
+    assert.deepEqual(normal, await jsonld.expand(small));
+  });
+  it('Parses JSON-LD', { only: true }, async () => {
+    const result = await expand(structuredClone(large));
+    const normal = normalizeJSONLD(result);
+
+    assert.deepEqual(normal, await jsonld.expand(large));
+  });
+
+
+});
+
+const small = {
+  "@id": "http://store.example.com/",
+  "@type": "Store",
+  "name": "Links Bike Shop",
+  "@context": {
+    "Store": "http://ns.example.com/store#Store",
+    "Product": "http://ns.example.com/store#Product",
+    "product": "http://ns.example.com/store#product",
+    "category":
+    {
+      "@id": "http://ns.example.com/store#category",
+      "@type": "@id"
+    },
+    "price": "http://ns.example.com/store#price",
+    "stock": "http://ns.example.com/store#stock",
+    "name": "http://purl.org/dc/terms/title",
+    "description": "http://purl.org/dc/terms/description",
+    "p": "http://store.example.com/products/",
+    "cat": "http://store.example.com/category/"
+  }
+};
+
+const large = {
     "@id": "http://store.example.com/",
     "@type": "Store",
     "name": "Links Bike Shop",
@@ -93,12 +210,4 @@ const jsonld = {
     }
 };
 
-describe('parse()', () => {
 
-  it('Parses JSON-LD', {only:true}, async () => {
-    const output = await expand(jsonld, {});
-
-    console.log(JSON.stringify(output, null, 2));
-  });
-
-});
