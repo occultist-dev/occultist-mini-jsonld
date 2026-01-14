@@ -313,7 +313,7 @@ export class JSONLDContext {
     console.warn(`Unrecognized alias "${match[1]}" for "${termOrType}"`);
   }
 
-  expandIRIs = (dataTypes: string | string[] | undefined) => {
+  expandTypes = (dataTypes: string | string[] | undefined) => {
     if (dataTypes == null) {
       return;
     } else if (typeof dataTypes === 'string') {
@@ -331,6 +331,32 @@ export class JSONLDContext {
     if (types.length === 0) return;
 
     return types;
+  }
+
+  expandIRIs = (iris: string | string[] | undefined) => {
+    if (iris == null) {
+      return;
+    } else if (typeof iris === 'string') {
+       const def = this.getOrCreateTypeDef(iris);
+
+       if (def != null) {
+         return { '@id': def.id };
+       }
+
+       return;
+    }
+
+    const expanded: IRIObject[] = [];
+
+    for (let i = 0, length = iris.length; i < length; i++) {
+      const def = this.getOrCreateTypeDef(iris[i]);
+
+      if (def != null) {
+        expanded.push({ '@id': def.id });
+      }
+    }
+
+    return expanded;
   }
 
   static fromOthers(
@@ -572,7 +598,7 @@ export async function expand(input: JSONValue, {
 }: {
   bag?: JSONLDContextBag,
   preserveRedundantArrays?: boolean,
-}): Promise<JSONValue> {
+} = {}): Promise<JSONValue> {
   if (input == null) return [];
 
   if (scalaTypes.has(typeof input)) {
@@ -590,7 +616,7 @@ export async function expand(input: JSONValue, {
   if (Array.isArray(input)) {
     node = {
       isArray: true,
-      children: [...input],
+      children: input,
       value: input,
       index: 0,
       context: undefined,
@@ -644,11 +670,11 @@ export async function expand(input: JSONValue, {
       
 
       // expand the value's @type value
-      if (!node.isArray && node.value[idKW] != null) {
-        node.value['@id'] = node?.context.expandIRIs(node.value[idKW]);
+      if (!node.isArray && node.value[idKW] != null && node.context != null) {
+        node.value['@id'] = node?.context.expandTypes(node.value[idKW]);
       }
-      if (!node.isArray && node.value[typeKW] != null) {
-        node.value['@type'] = node?.context.expandIRIs(node.value[typeKW]);
+      if (!node.isArray && node.value[typeKW] != null && node.context != null) {
+        node.value['@type'] = node?.context.expandTypes(node.value[typeKW]);
       }
 
       // place the value within its container.
@@ -706,7 +732,7 @@ export async function expand(input: JSONValue, {
     if (def?.type === '@id') {
       asValue = true;
 
-      value = { '@id': node.context.expandIRIs(value as string) };
+      value = node.context.expandIRIs(value as string);
     }
     
     // expand the selected child
@@ -730,7 +756,7 @@ export async function expand(input: JSONValue, {
     } else if (Array.isArray(value)) {
       node = {
         isArray: true,
-        children: [...value],
+        children: value,
         value,
         index: 0,
         parent: node,

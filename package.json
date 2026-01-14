@@ -33,6 +33,7 @@
   },
   "devDependencies": {
     "@occultist/occultist": "^0.0.12",
+    "@types/deno": "^2.5.0",
     "@types/jsonld": "^1.5.15",
     "@types/node": "^24.10.1",
     "esbuild": "^0.27.0",

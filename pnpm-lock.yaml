@@ -4,13 +4,20 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  '@occultist/occultist': link:../occultist
+  '@octiron/octiron': link:../octiron
+
 importers:
 
   .:
     devDependencies:
       '@occultist/occultist':
-        specifier: ^0.0.12
-        version: 0.0.12(json-ptr@3.1.1)(jsonld@9.0.0)
+        specifier: link:../occultist
+        version: link:../occultist
+      '@types/deno':
+        specifier: ^2.5.0
+        version: 2.5.0
       '@types/jsonld':
         specifier: ^1.5.15
         version: 1.5.15
@@ -192,11 +199,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@occultist/occultist@0.0.12':
-    resolution: {integrity: sha512-8ur1ue5WdXrmLKEeQLW2JW0dewotU4M8RpV1hRspBNPgbRcffi6FRHkjrY5jk/w7TLUwaayy9d6Mz+AqZ2lC6A==}
-    peerDependencies:
-      json-ptr: ^3.1.1
-      jsonld: ^9.0.0
+  '@types/deno@2.5.0':
+    resolution: {integrity: sha512-g8JS38vmc0S87jKsFzre+0ZyMOUDHPVokEJymSCRlL57h6f/FdKPWBXgdFh3Z8Ees9sz11qt9VWELU9Y9ZkiVw==}
 
   '@types/jsonld@1.5.15':
     resolution: {integrity: sha512-PlAFPZjL+AuGYmwlqwKEL0IMP8M8RexH0NIPGfCVWSQ041H2rR/8OlyZSD7KsCVoN8vCfWdtWDBxX8yBVP+xow==}
@@ -336,10 +340,7 @@ snapshots:
   '@esbuild/win32-x64@0.27.2':
     optional: true
 
-  '@occultist/occultist@0.0.12(json-ptr@3.1.1)(jsonld@9.0.0)':
-    dependencies:
-      json-ptr: 3.1.1
-      jsonld: 9.0.0
+  '@types/deno@2.5.0': {}
 
   '@types/jsonld@1.5.15': {}
 
