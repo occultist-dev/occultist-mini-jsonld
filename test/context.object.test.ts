@@ -1,7 +1,7 @@
 import jsonld from 'jsonld';
 import assert from 'node:assert/strict';
 import {describe, it} from 'node:test';
-import {expand, JSONLDContextBag, type IRIObject, type JSONArray, type JSONValue} from '../lib/expand.ts';
+import {expand, JSONLDContext, JSONLDContextBag, type IRIObject, type JSONArray, type JSONValue} from '../lib/expand.ts';
 
 
 /**
@@ -117,10 +117,9 @@ describe('JSONLDContext.fromJSONObject()', () => {
       fetcher: makeFetcher([doc]),
     });
 
-    const ctx = await bag.fetchContext('https://example.com/context');
+    const ctx = await JSONLDContext.fetch('https://example.com/context', bag);
 
     assert.equal(ctx.url, 'https://example.com/context');
-    assert.equal(ctx.iri, 'https://example.com/actual-used');
     assert.equal(ctx.base, 'https://example.com');
     assert.equal(ctx.version, 1.1);
     assert.equal(ctx.vocab, 'https://schema.org/');

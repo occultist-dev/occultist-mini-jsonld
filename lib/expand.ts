@@ -1,4 +1,3 @@
-
 export type JSONPrimitive = string | number | boolean | null | undefined;
 
 export type JSONValue = JSONPrimitive | JSONObject | JSONArray;
@@ -98,9 +97,15 @@ export class JSONLDContextCtx {
   }
 }
 
+export type CacheMethod =
+  | 'dont-cache'
+  | 'cache'
+;
+
 export class JSONLDContextBag {
   contexts: Map<string, JSONLDContext> = new Map();
   fetcher: typeof fetch = fetch;
+  cacheMethod: CacheMethod;
   #requestInit: RequestInit = {
     method: 'GET',
     headers: { 'Content-Type': 'application/ld+json' },
@@ -109,10 +114,14 @@ export class JSONLDContextBag {
   constructor({
     fetcher,
     contexts,
+    cacheMethod,
   }: {
-    fetcher?: typeof fetch,
-    contexts?: Map<string, JSONLDContext>,
+    fetcher?: typeof fetch;
+    contexts?: Map<string, JSONLDContext>;
+    cacheMethod?: CacheMethod;
   } = {}) {
+    this.cacheMethod = cacheMethod ?? 'dont-cache';
+
     if (contexts instanceof Map) {
       this.contexts = contexts;
     }
@@ -131,30 +140,12 @@ export class JSONLDContextBag {
   }
 
   set(context: JSONLDContext): void {
-    if (context.iri == null) {
+    if (this.cacheMethod === 'dont-cache' ||
+       context.url == null) {
       return;
     }
 
-    this.contexts.set(context.iri, context);
-  }
-
-  async fetchContext(url: string): Promise<JSONLDContext> {
-    const res = await this.fetcher(url, this.#requestInit);
-    const json = await res.json();
-    const source = new JSONLDContextSource(url, json);
-    const ctx = new JSONLDContextCtx(source);
-
-    const resolved = await JSONLDContext.fromSource(source, ctx, this);
-
-    if (Array.isArray(resolved[1])) {
-      let length: number = resolved[1].length;
-
-      for (let i = 0; i < length; i++) {
-        this.set(resolved[1][i]);
-      }
-    }
-
-    return resolved[0];
+    this.contexts.set(context.url, context);
   }
 }
 
@@ -292,7 +283,7 @@ export class JSONLDContext {
       return;
     }
 
-    if (Object.hasOwn(this.aliases[match[1]])) {
+    if (Object.hasOwn(this.aliases, match[1])) {
       const alias = this.aliases[match[1]];
       const def = new JSONLDTypeDef(alias + match[2]);
 
@@ -309,8 +300,6 @@ export class JSONLDContext {
 
       return def;
     }
-
-    console.warn(`Unrecognized alias "${match[1]}" for "${termOrType}"`);
   }
 
   expandTypes = (dataTypes: string | string[] | undefined) => {
@@ -373,6 +362,10 @@ export class JSONLDContext {
     let types: Map<string, JSONLDTypeDef> = new Map();
     
     for (let i = 0, l = others.length; i < l; i++) {
+      if (others[i] == null) {
+        continue;
+      }
+
       base ??= others[i].base;
       version ??= others[i].version;
       vocab ??= others[i].vocab;
@@ -408,45 +401,45 @@ export class JSONLDContext {
     );
   }
   
-  static fromJSONObject(source: JSONLDContextSource): JSONLDContext {
-    const context = source.json['@context'] ?? source.json as JSONValue;
+  static fromJSONObject(json: JSONObject, url?: string): JSONLDContext {
+    const contextJSON = json;
     const aliases = new Map<string, string>();
     const kwaliases = new JSONLDKWAliases();
     const types = new Map<string, JSONLDTypeDef>();
-    const entries: Array<[string, JSONValue]> = Object.entries(context);
+    const entries: Array<[string, JSONValue]> = Object.entries(contextJSON);
     
     let base: string | undefined;
-    if (typeof context['@base'] === 'string' &&
-        urlRe.test(context['@base'])
+    if (typeof contextJSON['@base'] === 'string' &&
+        urlRe.test(contextJSON['@base'])
     ) {
-      base = context['@base'];
-    } else if (context['@base'] != null) {
-      console.warn(`Invalid @base "${context['@base']}" from ${source.url}`);
+      base = contextJSON['@base'];
+    } else if (contextJSON['@base'] != null) {
+      console.warn(`Invalid @base "${contextJSON['@base']}" from ${url ?? 'embedded'}`);
     }
 
     let version: 1.1 | undefined;
-    if (context['@version'] === 1.1) {
-      version = context['@version'];
-    } else if (context['@version'] != null) {
-      console.warn(`Invalid @version "${context['@version']}" from ${source.url}`);
+    if (contextJSON['@version'] === 1.1) {
+      version = contextJSON['@version'];
+    } else if (contextJSON['@version'] != null) {
+      console.warn(`Invalid @version "${contextJSON['@version']}" from ${url ?? 'embedded'}`);
     }
 
     let vocab: string | undefined;
-    if (typeof context['@vocab'] === 'string' &&
-        urlRe.test(context['@vocab'])
+    if (typeof contextJSON['@vocab'] === 'string' &&
+        urlRe.test(contextJSON['@vocab'])
     ) {
-      vocab = context['@vocab'];
-    } else if (context['@vocab'] != null) {
-      console.warn(`Invalid @vocab "${context['@vocab']}" from ${source.url}`);
+      vocab = contextJSON['@vocab'];
+    } else if (contextJSON['@vocab'] != null) {
+      console.warn(`Invalid @vocab "${contextJSON['@vocab']}" from ${url ?? 'embedded'}`);
     }
 
     let language: string | undefined;
-    if (typeof context['@language'] === 'string' &&
-        context['@language'].length > 0
+    if (typeof contextJSON['@language'] === 'string' &&
+        contextJSON['@language'].length > 0
     ) {
-      language = context['@language'];
-    } else if (context['@language'] != null) {
-      console.warn(`Invalid @language "${context['@language']}" from ${source.url}`);
+      language = contextJSON['@language'];
+    } else if (contextJSON['@language'] != null) {
+      console.warn(`Invalid @language "${contextJSON['@language']}" from ${url ?? 'embedded'}`);
     }
 
     let key: string;
@@ -460,12 +453,12 @@ export class JSONLDContext {
       if (typeof value !== 'string') continue;
 
       if (value === '@context') {
-        console.warn(`@context cannot be aliased "${key}": "${value}" from ${source.url}`);
+        console.warn(`@context cannot be aliased "${key}": "${value}" from ${url ?? 'embedded'}`);
 
         continue;
       } else if (value.startsWith('@')) {
         if (kwaliases[value] == null) {
-          console.warn(`Unsupported keyword alias "${key}": "${value}" from ${source.url}`);
+          console.warn(`Unsupported keyword alias "${key}": "${value}" from ${url ?? 'embedded'}`);
 
           continue;
         }
@@ -477,43 +470,10 @@ export class JSONLDContext {
         aliases[key] = value;
       }
     }
-
-    let iri: string | undefined;
-    let match: RegExpExecArray;
-    let aliasTag: string;
-    let suffix: string;
-    let alias: string;
-    let def: JSONLDTypeDef;
-    let tmpIRI = source.json[kwaliases['@id']];
-
-    if (isJSONObject(source.json)) {
-      if (typeof tmpIRI !== 'string') {
-        console.warn(`Invalid @id "${kwaliases['@id']}": "${tmpIRI}" from ${source.url}`);
-      } else if (urlRe.test(tmpIRI)) {
-        iri = tmpIRI;
-      } else {
-         match = aliasRe.exec(value);
-
-         if (match == null) {
-           console.warn(`Invalid context value "${key}": "${value}" from ${source.url}`);
-
-         } else {
-           [, aliasTag, suffix] = match;
-           alias = aliases.get(aliasTag);
-
-           if (alias == null) {
-             console.warn(`Invalid @id "${kwaliases['@id']}": "${tmpIRI}" from ${source.url}`);
-
-           } else {
-             iri = `${alias}${suffix}`;
-           }
-         }
-      }
-    }
     
     const ctx = new JSONLDContext(
-      source.url,
-      iri,
+      url,
+      undefined,
       base,
       vocab,
       version,
@@ -547,20 +507,103 @@ export class JSONLDContext {
     return ctx;
   }
 
-  static async fromSource(
-    source: JSONLDContextSource,
-    ctx: JSONLDContextCtx,
+  static null(url?: string) {
+    return new JSONLDContext(
+      url,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new Map(),
+      new JSONLDKWAliases(),
+      new Map(),
+    );
+  }
+
+  static async fetch(
+    iri: string,
     bag: JSONLDContextBag,
-  ): Promise<[
-    primary: JSONLDContext,
-    related?: JSONLDContext[],
-  ]> {
-    if (isJSONObject(source.json) && (
-      isJSONObject(source.json['@context']) ||
-      source.json['@context'] == null
-    )) {
-      return [JSONLDContext.fromJSONObject(source)];
+  ): Promise<JSONLDContext | undefined> {
+    if (bag.has(iri)) {
+      return bag.get(iri);
     }
+
+    const res = await bag.fetcher(iri, {
+      method: 'GET',
+      headers: { 'Accept': 'application/ld+json' },
+    });
+
+    if (!res.ok) {
+      console.warn(`Failed to fetch context "${iri}"`);
+      return;
+    }
+
+    const contentType = res.headers.get('Content-Type');
+
+    if (contentType !== 'application/ld+json') {
+      console.warn(`Recieved unexpected content "${contentType}" for context "${iri}"`);
+      return;
+    }
+
+    const json = await res.json();
+
+    if (!isJSONObject(json)) {
+      console.warn(`Expected object for context from "${iri}"`);
+      return;
+    }
+
+    return JSONLDContext.resolve(
+      new JSONLDContextSource(iri, json),
+      bag,
+    );
+  }
+
+  static async resolve(
+    source: JSONLDContextSource,
+    bag: JSONLDContextBag,
+  ): Promise<JSONLDContext | undefined> {
+    const contextJSON = source.json['@context'];
+
+    if (isJSONObject(contextJSON)) {
+      const ctx = JSONLDContext.fromJSONObject(contextJSON, source.url);
+
+      bag.set(ctx);
+
+      return ctx;
+    } else if (contextJSON === null) {
+      const ctx = JSONLDContext.null(source.url);
+
+      bag.set(ctx);
+
+      return ctx;
+    } else if (typeof contextJSON === 'string') {
+      return JSONLDContext.fetch(contextJSON, bag);
+    } else if (!Array.isArray(contextJSON)) {
+      return;
+    }
+
+    const promises: Array<Promise<JSONLDContext>> = [];
+
+    for (let i = 0, length = contextJSON.length; i < length; i++) {
+      if (typeof contextJSON[i] === 'string') {
+        promises.push(JSONLDContext.fetch(contextJSON[i], bag));
+      } else if (isJSONObject(contextJSON[i])) {
+        promises.push(
+          Promise.resolve(JSONLDContext.fromJSONObject(contextJSON[i]))
+        );
+      } else {
+        console.warn(contextJSON);
+        throw new Error(`Invalid JSON-LD @context provided`);
+      }
+    }
+    
+    const others = await Promise.all(promises);
+    const ctx = JSONLDContext.fromOthers(contextJSON['@id'], source, others);
+
+    bag.set(ctx);
+
+    return ctx;
   }
 }
 
@@ -592,16 +635,15 @@ type Node = ObjectNode | ArrayNode;
 
 const scalaTypes = new Set(['boolean', 'number', 'string']);
 
-export async function expand(input: JSONValue, {
-  bag = new JSONLDContextBag(),
-  preserveRedundantArrays,
-}: {
-  bag?: JSONLDContextBag,
-  preserveRedundantArrays?: boolean,
-} = {}): Promise<JSONValue> {
-  if (input == null) return [];
 
-  if (scalaTypes.has(typeof input)) {
+export async function expand(input: JSONValue, {
+  url,
+  bag = new JSONLDContextBag(),
+}: {
+  url?: string;
+  bag?: JSONLDContextBag;
+} = {}): Promise<JSONValue> {
+  if (input == null || scalaTypes.has(typeof input)) {
     console.warn(`JSON-LD input "${input}" must be an object or array`);
 
     return null;
@@ -644,12 +686,13 @@ export async function expand(input: JSONValue, {
 
     if (node.index === 0 &&
         !node.isArray &&
-        node.value['@context'] != null
+        node.value['@context'] !== undefined
        ) {
       // the node value defines a context.
 
-      node.context = JSONLDContext.fromJSONObject(
-        new JSONLDContextSource(undefined, node.value)
+      node.context = await JSONLDContext.resolve(
+        new JSONLDContextSource(undefined, node.value),
+        bag,
       );
 
       delete node.value['@context'];

@@ -1,15 +1,15 @@
 {
-  "name": "@occultist/occultist",
-  "description": "A koa inspired web framework with first class support for request caching and content negotiation",
+  "name": "@occultist/jsonld-expand",
+  "description": "A minimal incomplete JSON-LD expansion algorithm",
   "author": "Matthew Quinn",
-  "homepage": "https://github.com/occultist-dev/occultist",
+  "homepage": "https://github.com/occultist-dev/occultist-jsonld-expand",
   "license": "MIT",
   "type": "module",
-  "main": "dist/mod.js",
-  "types": "dist/mod.d.ts",
+  "main": "dist/mini.js",
+  "types": "dist/mini.d.ts",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/occultist-dev/occultist.git"
+    "url": "git+https://github.com/occultist-dev/occultist-jsonld-expand.git"
   },
   "bugs": {
     "url": "https://github.com/occultist-dev/occultist/issues"
@@ -27,17 +27,11 @@
     "./dist",
     "./lib"
   ],
-  "peerDependencies": {
-    "json-ptr": "^3.1.1",
-    "jsonld": "^9.0.0"
-  },
   "devDependencies": {
-    "@occultist/occultist": "^0.0.12",
+    "@occultist/occultist": "link:../occultist",
     "@types/deno": "^2.5.0",
     "@types/jsonld": "^1.5.15",
     "@types/node": "^24.10.1",
-    "esbuild": "^0.27.0",
-    "json-ptr": "^3.1.1",
     "jsonld": "^9.0.0",
     "typescript": "^5.9.3"
   },
