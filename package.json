@@ -5,8 +5,8 @@
   "homepage": "https://github.com/occultist-dev/occultist-jsonld-expand",
   "license": "MIT",
   "type": "module",
-  "main": "dist/mini.js",
-  "types": "dist/mini.d.ts",
+  "main": "lib/expand.ts",
+  "types": "dist/expand.d.ts",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/occultist-dev/occultist-jsonld-expand.git"
