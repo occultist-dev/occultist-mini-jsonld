@@ -36,12 +36,12 @@ Many JSON-LD features are untested but the basic job of expanding object propert
 and '@id' values is implemented.
 
 ```
-import { expand, JSONLDContextBag } from '@occultist/jsonld-expand';
+import { expand, JSONLDContextStore } from '@occultist/jsonld-expand';
 
 // optionally allow caching of remote contexts
 // a fetcher function can also be passed in to
 // alter the fetch behaviour.
-const bag = new JSONLDContextBag({ cacheMethod: 'cache' });
+const store = new JSONLDContextStore({ cacheMethod: 'cache' });
 
 const expanded = await expand({
   '@context': {
@@ -51,7 +51,7 @@ const expanded = await expand({
   'id': 'https://example.com/foo',
   'name': 'Matthew Quinn',
   'website': 'https://matthewquinn.me',
-}, { bag });
+}, { store });
 
 console.log(expanded);
 // {

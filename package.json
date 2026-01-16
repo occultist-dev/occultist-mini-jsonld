@@ -16,7 +16,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "test": "node --test"
+    "test": "node --test test/**/*.test.ts"
   },
   "directories": {
     "lib": "lib"
@@ -28,12 +28,15 @@
     "./lib"
   ],
   "devDependencies": {
-    "@occultist/occultist": "link:../occultist",
     "@types/deno": "^2.5.0",
     "@types/jsonld": "^1.5.15",
     "@types/node": "^24.10.1",
     "jsonld": "^9.0.0",
     "typescript": "^5.9.3"
   },
-  "version": "0.0.1"
+  "version": "0.0.1",
+  "dependencies": {
+    "@occultist/occultist": "^0.0.12",
+    "deno": "^2.6.5"
+  }
 }

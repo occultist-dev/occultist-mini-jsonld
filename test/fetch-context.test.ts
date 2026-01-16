@@ -1,85 +1,8 @@
 import jsonld from 'jsonld';
 import assert from 'node:assert/strict';
 import {describe, it} from 'node:test';
-import {expand, JSONLDContext, JSONLDContextBag, type IRIObject, type JSONArray, type JSONValue} from '../lib/expand.ts';
-
-
-/**
- * Recursively updates the JSON-ld to be in normal expanded form
- * so it can be compared to the output of the jsonld.js expand function.
- */
-function normalizeJSONLD(value: JSONValue): JSONValue {
-  function innerArray(value: JSONValue): JSONValue {
-    if (!Array.isArray(value)) {
-      if (typeof value === 'boolean' ||
-          typeof value === 'number' ||
-          typeof value === 'string') {
-        return { '@value': value }
-      }
-
-      for (const [key2, value2] of Object.entries(value)) {
-        value[key2] = inner(value2, key2);
-      }
-
-      return value;
-    }
-
-    for (let i = 0, length = value.length; i < length; i++) {
-      value[i] = inner(value[i]);
-    }
-
-    return value;
-  }
-
-  function inner(value: JSONValue, key?: string): JSONValue {
-    if (!Array.isArray(value)) {
-      if (key === '@id') return value;
-      if (key === '@type') return [value];
-
-      if (typeof value === 'boolean' ||
-          typeof value === 'number' ||
-          typeof value === 'string') {
-        return [{ '@value': value }]
-      }
-
-      for (const [key2, value2] of Object.entries(value)) {
-        value[key2] = inner(value2, key2);
-      }
-
-      return [value];
-    }
-
-    for (let i = 0, length = value.length; i < length; i++) {
-      value[i] = innerArray(value[i]);
-    }
-
-    return value;
-  }
-
-  if (value == null) return value;
-  switch (typeof value) {
-    case 'boolean': return value;
-    case 'number': return value;
-    case 'string': return value;
-  }
-
-  let normalized: JSONArray;
-
-  if (Array.isArray(value)) {
-    normalized = value;
-
-    for (let i = 0, length = value.length; i < length; i++) {
-      normalized[i] = innerArray(normalized[i]);
-    }
-  } else {
-    normalized = [value];
-    for (const [key, item] of Object.entries(value)) {
-      value[key] = inner(item, key);
-    }
-  }
-
-  return normalized;
-}
+import {expand, JSONLDContext, JSONLDContextStore, type IRIObject, type JSONArray, type JSONValue} from '../lib/expand.ts';
+import { normalizeJSONLD } from './utils/normalizeJSONLD.ts';
 
 
 function makeFetcher(docs: IRIObject[]): typeof fetch {
@@ -113,11 +36,11 @@ describe('JSONLDContext.fromJSONObject()', () => {
       },
     };
 
-    const bag = new JSONLDContextBag({
+    const store = new JSONLDContextStore({
       fetcher: makeFetcher([doc]),
     });
 
-    const ctx = await JSONLDContext.fetch('https://example.com/context', bag);
+    const ctx = await JSONLDContext.fetch('https://example.com/context', store);
 
     assert.equal(ctx.url, 'https://example.com/context');
     assert.equal(ctx.base, 'https://example.com');

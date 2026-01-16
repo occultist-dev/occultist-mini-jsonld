@@ -10,7 +10,7 @@
  */
 
 import jsonld from 'jsonld';
-import { expand, JSONLDContextBag, JSONObject } from '../lib/expand.ts';
+import { expand, JSONLDContextStore, JSONObject } from '../lib/expand.ts';
 import { Registry } from '@occultist/occultist';
 
 const registry = new Registry({
@@ -55,7 +55,7 @@ registry.http.get('/context4')
     }
   }));
 
-const bag = new JSONLDContextBag({
+const store = new JSONLDContextStore({
   fetcher: (url, init) => {
     return registry.handleRequest(
       new Request(url, init)
@@ -63,7 +63,7 @@ const bag = new JSONLDContextBag({
   }
 });
 
-const bagCache = new JSONLDContextBag({
+const storeCache = new JSONLDContextStore({
   cacheMethod: 'cache',
   fetcher: (url, init) => {
     return registry.handleRequest(
@@ -119,11 +119,11 @@ Deno.bench('jsonld.jd expand large object', { warmup: 100, n: 10000 }, async () 
  * tests. 
  */
 Deno.bench('@occultist/jsonld-expand fetch', { warmup: 100, n: 10000 }, async () => {
-  await expand(remote(), { bag });
+  await expand(remote(), { store });
 });
 
 Deno.bench('@occultist/jsonld-expand fetch cache', { warmup: 100, n: 10000 }, async () => {
-  await expand(remote(), { bag: bagCache });
+  await expand(remote(), { store: storeCache });
 });
 
 Deno.bench('jsonld.jd fetch', { warmup: 100, n: 10000 }, async () => {

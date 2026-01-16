@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {Registry} from '@occultist/occultist';
-import {JSONLDContext, JSONLDContextBag} from '../lib/expand.ts';
+import {JSONLDContext, JSONLDContextStore} from '../lib/expand.ts';
 
 
 function makeTestDeps() {
@@ -29,28 +29,28 @@ function makeTestDeps() {
     }));
 
 
-  const bag = new JSONLDContextBag({
+  const store = new JSONLDContextStore({
     fetcher: (url: string, init: RequestInit) => registry.handleRequest(
       new Request(url, init),
     ),
   });
 
-  return { registry, bag };
+  return { registry, store };
 }
 
 
 describe('JSONLDContext.fetch()', () => {
   it('Fetches remote contexts', async () => {
-    const { bag } = makeTestDeps();
-    const ctx = await JSONLDContext.fetch('https://example.com/context', bag);
+    const { store } = makeTestDeps();
+    const ctx = await JSONLDContext.fetch('https://example.com/context', store);
     
     assert(ctx.types.has('https://schema.org/'));
     assert.equal(ctx.types.get('scm').id, 'https://schema.org/');
   });
 
   it('Merges deep remote contexts', async () => {
-    const { bag } = makeTestDeps();
-    const ctx = await JSONLDContext.fetch('https://example.com/context2', bag);
+    const { store } = makeTestDeps();
+    const ctx = await JSONLDContext.fetch('https://example.com/context2', store);
     
     assert(ctx.types.has('https://schema.org/'));
     assert.equal(ctx.types.get('scm').id, 'https://schema.org/');
@@ -60,15 +60,15 @@ describe('JSONLDContext.fetch()', () => {
   it('Does not cache contexts when not enabled', async () => {
     let hit = 0;
     const { registry } = makeTestDeps();
-    const bag = new JSONLDContextBag({
+    const store = new JSONLDContextStore({
       fetcher: (url: string, init: RequestInit) => {
         hit++;
 
         return registry.handleRequest(new Request(url, init));
       }
     });
-    await JSONLDContext.fetch('https://example.com/context2', bag);
-    const ctx = await JSONLDContext.fetch('https://example.com/context2', bag);
+    await JSONLDContext.fetch('https://example.com/context2', store);
+    const ctx = await JSONLDContext.fetch('https://example.com/context2', store);
     
     assert.equal(hit, 4);
     assert(ctx.types.has('https://schema.org/'));
@@ -79,7 +79,7 @@ describe('JSONLDContext.fetch()', () => {
   it('Caches contexts when enabled', async () => {
     let hit = 0;
     const { registry } = makeTestDeps();
-    const bag = new JSONLDContextBag({
+    const store = new JSONLDContextStore({
       cacheMethod: 'cache',
       fetcher: (url: string, init: RequestInit) => {
         hit++;
@@ -87,8 +87,8 @@ describe('JSONLDContext.fetch()', () => {
         return registry.handleRequest(new Request(url, init));
       }
     });
-    await JSONLDContext.fetch('https://example.com/context2', bag);
-    const ctx = await JSONLDContext.fetch('https://example.com/context2', bag);
+    await JSONLDContext.fetch('https://example.com/context2', store);
+    const ctx = await JSONLDContext.fetch('https://example.com/context2', store);
     
     assert.equal(hit, 2);
     assert(ctx.types.has('https://schema.org/'));
