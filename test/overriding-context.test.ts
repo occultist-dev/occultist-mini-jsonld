@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {Registry} from '@occultist/occultist';
-import {expand, JSONLDContext, JSONLDContextStore} from '../lib/expand.ts';
+import {expand, JSONLDContextStore} from '../lib/expand.ts';
 import { normalizeJSONLD } from './utils/normalizeJSONLD.ts';
 import jsonld from 'jsonld';
 

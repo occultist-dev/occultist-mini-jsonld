@@ -40,7 +40,7 @@ export class JSONLDContextCtx {
         }
     }
 }
-export class JSONLDContextBag {
+export class JSONLDContextStore {
     contexts = new Map();
     fetcher = fetch;
     cacheMethod;
@@ -242,8 +242,17 @@ export class JSONLDContext {
         }
         return new JSONLDContext(source.url, iri, base, vocab, version, language, aliases, kwaliases, types);
     }
-    static fromJSONObject(json, url) {
-        const contextJSON = json;
+    /**
+     * Creates a JSONLDContext instance from a json object.
+     *
+     * A URL should only be provided if it was the URL used for requesting
+     * the JSON-LD holding this context value, and if the context json was
+     * located in the parent object.
+     *
+     * @param contextJSON A JSON-LD context object in JSON form.
+     * @param url The URL used to request the JSON-LD document the context belongs to.
+     */
+    static fromJSONObject(contextJSON, url) {
         const aliases = new Map();
         const kwaliases = new JSONLDKWAliases();
         const types = new Map();
@@ -330,11 +339,11 @@ export class JSONLDContext {
     static null(url) {
         return new JSONLDContext(url, undefined, undefined, undefined, undefined, undefined, new Map(), new JSONLDKWAliases(), new Map());
     }
-    static async fetch(iri, bag) {
-        if (bag.has(iri)) {
-            return bag.get(iri);
+    static async fetch(iri, store) {
+        if (store.has(iri)) {
+            return store.get(iri);
         }
-        const res = await bag.fetcher(iri, {
+        const res = await store.fetcher(iri, {
             method: 'GET',
             headers: { 'Accept': 'application/ld+json' },
         });
@@ -352,22 +361,22 @@ export class JSONLDContext {
             console.warn(`Expected object for context from "${iri}"`);
             return;
         }
-        return JSONLDContext.resolve(new JSONLDContextSource(iri, json), bag);
+        return JSONLDContext.resolve(new JSONLDContextSource(iri, json), store);
     }
-    static async resolve(source, bag) {
+    static async resolve(source, store) {
         const contextJSON = source.json['@context'];
         if (isJSONObject(contextJSON)) {
             const ctx = JSONLDContext.fromJSONObject(contextJSON, source.url);
-            bag.set(ctx);
+            store.set(ctx);
             return ctx;
         }
         else if (contextJSON === null) {
             const ctx = JSONLDContext.null(source.url);
-            bag.set(ctx);
+            store.set(ctx);
             return ctx;
         }
         else if (typeof contextJSON === 'string') {
-            return JSONLDContext.fetch(contextJSON, bag);
+            return JSONLDContext.fetch(contextJSON, store);
         }
         else if (!Array.isArray(contextJSON)) {
             return;
@@ -375,7 +384,7 @@ export class JSONLDContext {
         const promises = [];
         for (let i = 0, length = contextJSON.length; i < length; i++) {
             if (typeof contextJSON[i] === 'string') {
-                promises.push(JSONLDContext.fetch(contextJSON[i], bag));
+                promises.push(JSONLDContext.fetch(contextJSON[i], store));
             }
             else if (isJSONObject(contextJSON[i])) {
                 promises.push(Promise.resolve(JSONLDContext.fromJSONObject(contextJSON[i])));
@@ -387,12 +396,21 @@ export class JSONLDContext {
         }
         const others = await Promise.all(promises);
         const ctx = JSONLDContext.fromOthers(contextJSON['@id'], source, others);
-        bag.set(ctx);
+        store.set(ctx);
         return ctx;
+    }
+    static async resolveExtended(currentContext, source, store) {
+        const resolved = await JSONLDContext.resolve(source, store);
+        if (currentContext == null)
+            return resolved;
+        for (const [termOrType, def] of currentContext.types.entries()) {
+            resolved.types.set(termOrType, def);
+        }
+        return resolved;
     }
 }
 const scalaTypes = new Set(['boolean', 'number', 'string']);
-export async function expand(input, { url, bag = new JSONLDContextBag(), } = {}) {
+export async function expand(input, { url, store = new JSONLDContextStore(), } = {}) {
     if (input == null || scalaTypes.has(typeof input)) {
         console.warn(`JSON-LD input "${input}" must be an object or array`);
         return null;
@@ -433,8 +451,7 @@ export async function expand(input, { url, bag = new JSONLDContextBag(), } = {})
         if (node.index === 0 &&
             !node.isArray &&
             node.value['@context'] !== undefined) {
-            // the node value defines a context.
-            node.context = await JSONLDContext.resolve(new JSONLDContextSource(undefined, node.value), bag);
+            node.context = await JSONLDContext.resolveExtended(node.context, new JSONLDContextSource(undefined, node.value), store);
             delete node.value['@context'];
         }
         else if (node.index === 0 && node.parent != null) {
@@ -495,7 +512,12 @@ export async function expand(input, { url, bag = new JSONLDContextBag(), } = {})
                 continue;
             }
             def = node.context?.getOrCreateTypeDef(termOrType);
-            type = def?.id;
+            if (def == null) {
+                delete node.value[termOrType];
+                node.index++;
+                continue;
+            }
+            type = def.id;
         }
         node.index++;
         let asValue = false;

@@ -1,18 +1,18 @@
 {
-  "name": "@occultist/jsonld-expand",
+  "name": "@occultist/mini-jsonld",
   "description": "A minimal incomplete JSON-LD expansion algorithm",
   "author": "Matthew Quinn",
-  "homepage": "https://github.com/occultist-dev/occultist-jsonld-expand",
+  "homepage": "https://github.com/occultist-dev/occultist-mini-jsonld",
   "license": "MIT",
   "type": "module",
-  "main": "lib/expand.ts",
+  "main": "dist/expand.js",
   "types": "dist/expand.d.ts",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/occultist-dev/occultist-jsonld-expand.git"
+    "url": "git+https://github.com/occultist-dev/occultist-mini-jsonld.git"
   },
   "bugs": {
-    "url": "https://github.com/occultist-dev/occultist/issues"
+    "url": "https://github.com/occultist-dev/occultist-mini-jsonld/issues"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

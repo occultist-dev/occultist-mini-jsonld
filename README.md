@@ -5,7 +5,7 @@ when compared to jsonld.js.
 
 Typically jsonld.js will wrap all non-array values within arrays to make the data structure more regular
 for later processing. You can test this behaviour in the [JSON-LD.org playground](https://json-ld.org/playground/).
-The @occultist/jsonld-expand expand implementation only expands properties, it largely does not create
+The @occultist/mini-jsonld expand implementation only expands properties, it largely does not create
 extra arrays or nest scala values within `@value` objects, unless the value was presented in such
 form in the input data.
 
@@ -27,7 +27,7 @@ In the future a complete implementation might be developed, but currently this i
 ## Install
 
 ```
-npm add @occultist/jsonld-expand
+npm add @occultist/mini-jsonld
 ```
 
 ## Usage
@@ -36,7 +36,7 @@ Many JSON-LD features are untested but the basic job of expanding object propert
 and '@id' values is implemented.
 
 ```
-import { expand, JSONLDContextStore } from '@occultist/jsonld-expand';
+import { expand, JSONLDContextStore } from '@occultist/mini-jsonld';
 
 // optionally allow caching of remote contexts
 // a fetcher function can also be passed in to

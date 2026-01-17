@@ -41,7 +41,7 @@ export declare class JSONLDContextCtx {
     addSource(source: JSONLDContextSource): void;
 }
 export type CacheMethod = 'dont-cache' | 'cache';
-export declare class JSONLDContextBag {
+export declare class JSONLDContextStore {
     #private;
     contexts: Map<string, JSONLDContext>;
     fetcher: typeof fetch;
@@ -102,14 +102,25 @@ export declare class JSONLDContext {
         '@id': string;
     };
     static fromOthers(iri: string | undefined, source: JSONLDContextSource, others: JSONLDContext[]): JSONLDContext;
-    static fromJSONObject(json: JSONObject, url?: string): JSONLDContext;
+    /**
+     * Creates a JSONLDContext instance from a json object.
+     *
+     * A URL should only be provided if it was the URL used for requesting
+     * the JSON-LD holding this context value, and if the context json was
+     * located in the parent object.
+     *
+     * @param contextJSON A JSON-LD context object in JSON form.
+     * @param url The URL used to request the JSON-LD document the context belongs to.
+     */
+    static fromJSONObject(contextJSON: JSONObject, url?: string): JSONLDContext;
     static null(url?: string): JSONLDContext;
-    static fetch(iri: string, bag: JSONLDContextBag): Promise<JSONLDContext | undefined>;
-    static resolve(source: JSONLDContextSource, bag: JSONLDContextBag): Promise<JSONLDContext | undefined>;
+    static fetch(iri: string, store: JSONLDContextStore): Promise<JSONLDContext | undefined>;
+    static resolve(source: JSONLDContextSource, store: JSONLDContextStore): Promise<JSONLDContext | undefined>;
+    static resolveExtended(currentContext: JSONLDContext | undefined, source: JSONLDContextSource, store: JSONLDContextStore): Promise<JSONLDContext>;
 }
-export declare function expand(input: JSONValue, { url, bag, }?: {
+export declare function expand(input: JSONValue, { url, store, }?: {
     url?: string;
-    bag?: JSONLDContextBag;
+    store?: JSONLDContextStore;
 }): Promise<JSONValue>;
 /**
  * @description

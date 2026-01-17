@@ -57,7 +57,7 @@ describe('parse()', () => {
 
     assert.deepEqual(normal, await jsonld.expand(small));
   });
-  it('Parses JSON-LD', { only: true }, async () => {
+  it('Parses JSON-LD', async () => {
     const result = await expand(structuredClone(large));
     const normal = normalizeJSONLD(result);
 
