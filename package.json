@@ -1,5 +1,5 @@
 {
-  "name": "@occultist/jsonld-expand",
+  "name": "@occultist/mini-jsonld",
   "description": "A minimal incomplete JSON-LD expansion algorithm",
   "author": "Matthew Quinn",
   "homepage": "https://github.com/occultist-dev/occultist-jsonld-expand",

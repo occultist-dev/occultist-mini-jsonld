@@ -38,7 +38,7 @@ export type Fetcher = typeof fetch;
 
 export type JSONLDContextCache = Map<string, JSONLDContext>;
 
-const urlRe = /^[a-zA-Z\\-]+:\/\/[^\.]+\./;
+const urlRe = /^[a-zA-Z\\-]+:\/\//;
 
 const aliasRe = /^([^\:]+)\:(.*)$/;
 
@@ -257,6 +257,7 @@ export class JSONLDContext {
       return this.types.get(termOrType);
     }
 
+    urlRe.lastIndex = 0;
     if (urlRe.test(termOrType)) {
       const def = new JSONLDTypeDef(termOrType);
 
@@ -266,7 +267,7 @@ export class JSONLDContext {
     }
 
     const match = aliasRe.exec(termOrType);
-
+    
     if (match == null && this.vocab != null) {
       const type = this.vocab + termOrType;
 
@@ -274,7 +275,7 @@ export class JSONLDContext {
         return this.types.get(type);
       }
 
-      const def = new JSONLDTypeDef(this.vocab + termOrType);
+      const def = new JSONLDTypeDef(type);
 
       this.types.set(termOrType, def);
 
@@ -283,8 +284,8 @@ export class JSONLDContext {
       return;
     }
 
-    if (Object.hasOwn(this.aliases, match[1])) {
-      const alias = this.aliases[match[1]];
+    if (this.aliases.has(match[1])) {
+      const alias = this.aliases.get(match[1]);
       const def = new JSONLDTypeDef(alias + match[2]);
 
       this.types.set(termOrType, def);
@@ -551,7 +552,7 @@ export class JSONLDContext {
     const contentType = res.headers.get('Content-Type');
 
     if (contentType !== 'application/ld+json') {
-      console.warn(`Recieved unexpected content "${contentType}" for context "${iri}"`);
+      console.warn(`Received unexpected content "${contentType}" for context "${iri}"`);
       return;
     }
 
@@ -725,21 +726,18 @@ export async function expand(input: JSONValue, {
       node.context = node.parent.context;
     }
 
-
-    // aim of this do-while is to find the first object / array
-    // with yet to be processed leaves.
-
+    // node children have been processed.
     if (node.index === node.children.length) {
       const idKW = node.context?.kwaliases['@id'] ?? '@id';
       const typeKW = node.context?.kwaliases['@type'] ?? '@type';
       // if the node has looped through its children, time to expand it and move up.
       context = node.context;
       
-
-      // expand the value's @type value
+      // expand the value's @id value
       if (!node.isArray && node.value[idKW] != null && node.context != null) {
         node.value['@id'] = node?.context.expandTypes(node.value[idKW]);
       }
+
       if (!node.isArray && node.value[typeKW] != null && node.context != null) {
         node.value['@type'] = node?.context.expandTypes(node.value[typeKW]);
       }
@@ -762,6 +760,7 @@ export async function expand(input: JSONValue, {
           node.parent.value[node.type] = node.value;
         }
 
+        // term has been expanded. Delete the compact form.
         delete node.parent.value[node.termOrType];
       }
 
@@ -788,7 +787,11 @@ export async function expand(input: JSONValue, {
         continue;
       }
 
-      def = node.context?.getOrCreateTypeDef(termOrType);
+      if (node.context != null) {
+        def = node.context?.getOrCreateTypeDef(termOrType);
+      } else if (urlRe.test(termOrType)) {
+        def = new JSONLDTypeDef(termOrType);
+      }
 
       if (def == null) {
         delete node.value[termOrType];
