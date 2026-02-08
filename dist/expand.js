@@ -42,7 +42,7 @@ export class JSONLDContextCtx {
 }
 export class JSONLDContextStore {
     contexts = new Map();
-    fetcher = fetch;
+    fetcher = (input, args) => fetch(input, args);
     cacheMethod;
     #requestInit = {
         method: 'GET',

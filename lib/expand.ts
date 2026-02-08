@@ -104,7 +104,7 @@ export type CacheMethod =
 
 export class JSONLDContextStore {
   contexts: Map<string, JSONLDContext> = new Map();
-  fetcher: typeof fetch = fetch;
+  fetcher: typeof fetch = (input, args) => fetch(input, args);
   cacheMethod: CacheMethod;
   #requestInit: RequestInit = {
     method: 'GET',
